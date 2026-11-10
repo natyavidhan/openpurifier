@@ -1,0 +1,139 @@
+# OpenPurifier - ESPHome firmware for the ESP32-C3 SuperMini (relay-switched fan)
+#
+# First flash over USB:  esphome run openpurifier.yaml   (then updates go over Wi-Fi/OTA)
+# Pins: GPIO4 relay IN (10k pull-down keeps it off while booting)
+#       GPIO3 push button (to GND, internal pull-up)
+#       GPIO5 LED driver (BC547 base via 1k)
+#
+# Set the relay module's trigger jumper to H (high-level trigger): GPIO4 high = fan on.
+
+substitutions:
+  name: openpurifier
+  friendly: OpenPurifier
+  filter_life_hours: "4000"     # ~6 months of 24/7 use; PANCA says replace every 6-8 months
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly}
+  on_boot:
+    priority: -100
+    then:
+      - if:
+          condition:
+            switch.is_on: purifier
+          then:
+            - output.turn_on: led_out
+          else:
+            - output.turn_off: led_out
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+preferences:
+  flash_write_interval: 1min    # relay state and filter hours survive a power cut
+
+logger:
+api:
+ota:
+  - platform: esphome
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly} Setup"
+captive_portal:
+
+globals:
+  - id: filter_hours
+    type: uint32_t
+    restore_value: true
+    initial_value: "0"
+  - id: run_minutes             # not saved
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+output:
+  - platform: gpio
+    id: led_out
+    pin: GPIO5
+
+switch:
+  - platform: gpio
+    id: purifier
+    name: "Purifier"
+    icon: mdi:air-purifier
+    pin: GPIO4
+    restore_mode: RESTORE_DEFAULT_OFF   # comes back in the state it was in before a power cut
+    on_turn_on:
+      - output.turn_on: led_out
+    on_turn_off:
+      - output.turn_off: led_out
+
+binary_sensor:
+  - platform: gpio
+    id: front_button
+    name: "Button"
+    pin:
+      number: GPIO3
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on_off: 30ms
+    on_click:
+      - min_length: 30ms        # short press: fan on/off
+        max_length: 1s
+        then:
+          - switch.toggle: purifier
+      - min_length: 5s          # hold 5 s: new filter fitted
+        max_length: 15s
+        then:
+          - lambda: "id(filter_hours) = 0; id(run_minutes) = 0;"
+          - repeat:
+              count: 3
+              then:
+                - output.turn_off: led_out
+                - delay: 200ms
+                - output.turn_on: led_out
+                - delay: 200ms
+          - if:
+              condition:
+                switch.is_off: purifier
+              then:
+                - output.turn_off: led_out
+
+interval:
+  - interval: 1min
+    then:
+      - lambda: |-
+          if (!id(purifier).state) return;
+          if (++id(run_minutes) >= 60) { id(run_minutes) = 0; id(filter_hours) += 1; }
+
+sensor:
+  - platform: template
+    name: "Filter used"
+    icon: mdi:air-filter
+    unit_of_measurement: h
+    accuracy_decimals: 0
+    update_interval: 5min
+    lambda: "return id(filter_hours);"
+  - platform: template
+    name: "Filter life left"
+    icon: mdi:air-filter
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: 5min
+    lambda: "return std::max(0.0f, 100.0f - 100.0f * id(filter_hours) / ${filter_life_hours}.0f);"
+
+button:
+  - platform: template
+    name: "Reset filter timer"
+    icon: mdi:air-filter
+    on_press:
+      - lambda: "id(filter_hours) = 0; id(run_minutes) = 0;"
+
+# Later: auto mode with a PMS5003 particle sensor on GPIO20 (RX) / GPIO21 (TX), 5 V.

@@ -1,0 +1,53 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── CAD scratch ─────────────────────────────────────────
+# snapshots and previews from `cad model snapshot`
+cad/tmp/
+# GLB exports used for rendering (regenerate with `cad model export`)
+cad/render/out/
+*.blend1
+# draft renders; only the finals in docs/images are kept
+docs/images/*_draft.png
+
+# ── ESPHome ─────────────────────────────────────────────
+# your Wi-Fi credentials: copy secrets.example.yaml instead
+firmware/secrets.yaml
+firmware/.esphome/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+.esphome/
+
+# ── Slicer output ───────────────────────────────────────
+*.gcode
+*.bgcode
+*.gcode.3mf
+*.ufp
+
+# ── Third-party reference material ──────────────────────
+# Product photos and datasheets belong to their owners; see reference/README.md
+reference/*
+!reference/README.md
+
+# ── Local working files ─────────────────────────────────
+_work/
+node_modules/
+*.log
+.env
+.env.*
+
+# ── OS / editors ────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~

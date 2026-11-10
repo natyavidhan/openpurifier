@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- Source of docs/images/banner.png. Rebuild: see docs/banner/README.md -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6f5;
+    --ink: #0f1a17;
+    --muted: #5b6b66;
+    --accent: #1f9d74;
+    --line: #dde4e1;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 560px; overflow: hidden; background: var(--bg); }
+  body {
+    font-family: "Inter Tight", system-ui, sans-serif;
+    color: var(--ink);
+    position: relative;
+  }
+  .glow {
+    position: absolute; right: 120px; top: -140px; width: 760px; height: 760px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(31,157,116,.16) 0%, rgba(31,157,116,.05) 45%, rgba(31,157,116,0) 70%);
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: linear-gradient(90deg, rgba(0,0,0,.0) 0%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.0) 100%);
+    opacity: .55;
+  }
+  .copy { position: absolute; left: 112px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; width: 820px; }
+  .pill {
+    align-self: flex-start; display: inline-flex; align-items: center; gap: 10px;
+    font: 500 17px "JetBrains Mono", monospace; letter-spacing: .02em; color: var(--muted);
+    border: 1px solid var(--line); background: #fff; padding: 8px 16px 8px 12px; border-radius: 999px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(31,157,116,.15); }
+  h1 { font-weight: 700; font-size: 112px; letter-spacing: -0.045em; line-height: 1; margin-top: 30px; }
+  h1 span { color: var(--accent); }
+  p { font-size: 29px; line-height: 1.38; color: var(--muted); margin-top: 24px; max-width: 700px; letter-spacing: -0.005em; }
+  .meta { display: flex; gap: 28px; margin-top: 38px; font: 500 17px "JetBrains Mono", monospace; color: var(--muted); }
+  .meta b { color: var(--ink); font-weight: 500; }
+  .meta i { font-style: normal; color: var(--line); }
+  .hero { position: absolute; right: 150px; top: 46px; height: 640px; }
+  .air { position: absolute; right: 0; top: 0; width: 1600px; height: 560px; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <svg class="air" viewBox="0 0 1600 560" fill="none" stroke="#1f9d74" stroke-linecap="round">
+    <path d="M1192 92 C 1180 70, 1204 52, 1192 24" stroke-width="3" opacity=".6"/>
+    <path d="M1236 96 C 1224 72, 1250 54, 1238 22" stroke-width="3" opacity=".38"/>
+    <path d="M1148 96 C 1136 72, 1162 54, 1150 26" stroke-width="3" opacity=".38"/>
+  </svg>
+  <img class="hero" src="../images/render_smart_hero.png" alt="">
+  <div class="copy">
+    <div class="pill"><span class="dot"></span>open hardware · 3D printable</div>
+    <h1>Open<span>Purifier</span></h1>
+    <p>A HEPA air purifier you print yourself, built around a standard filter and an off-the-shelf exhaust fan.</p>
+    <div class="meta"><span><b>256 mm</b> bed</span><i>/</i><span><b>~1.2 kg</b> filament</span><i>/</i><span><b>ESP32</b> + Home Assistant</span></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+# OpenPurifier - ESPHome firmware for the ESP32-C3 SuperMini (servo-flipped mains toggle)
+#
+# First flash over USB:  esphome run openpurifier.yaml   (then updates go over Wi-Fi/OTA)
+# Pins: GPIO4 servo signal, GPIO3 push button (to GND), GPIO5 LED driver (BC547 base via 1k)
+#
+# The toggle switch latches mechanically, so the firmware remembers what it last set it to.
+# If someone flips S1 by hand, press "Fix out-of-sync state" once.
+
+substitutions:
+  name: openpurifier
+  friendly: OpenPurifier
+  filter_life_hours: "4000"     # ~6 months of 24/7 use; PANCA says replace every 6-8 months
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly}
+  on_boot:
+    priority: -100
+    then:
+      - output.set_level:
+          id: led_out
+          level: !lambda "return id(fan_on) ? 1.0f : 0.0f;"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+preferences:
+  flash_write_interval: 0s      # write the switch state immediately (it only changes on a flip)
+
+logger:
+api:
+ota:
+  - platform: esphome
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly} Setup"
+captive_portal:
+
+globals:
+  - id: fan_on                  # last position the servo put S1 in
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: filter_hours            # saved once an hour to spare the flash
+    type: uint32_t
+    restore_value: true
+    initial_value: "0"
+  - id: run_minutes             # not saved
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+output:
+  - platform: ledc
+    id: servo_pwm
+    pin: GPIO4
+    frequency: 50 Hz
+  - platform: ledc
+    id: led_out
+    pin: GPIO5
+    frequency: 1000 Hz
+
+servo:
+  - id: fork_servo
+    output: servo_pwm
+    min_level: 2.5%             # 0.5 ms = -90 deg
+    idle_level: 7.5%            # 1.5 ms = centre
+    max_level: 12.5%            # 2.5 ms = +90 deg
+
+number:
+  - platform: template
+    id: throw_deg               # CAD check: lever snaps at 13 deg, jams at 19 deg -> 16
+    name: "Switch throw"
+    entity_category: config
+    unit_of_measurement: "°"
+    min_value: 8
+    max_value: 24
+    step: 1
+    initial_value: 16
+    optimistic: true
+    restore_value: true
+  - platform: template
+    id: trim_deg                # the horn only fits the spline every ~17 deg: trim the rest here
+    name: "Servo centre trim"
+    entity_category: config
+    unit_of_measurement: "°"
+    min_value: -15
+    max_value: 15
+    step: 1
+    initial_value: 0
+    optimistic: true
+    restore_value: true
+
+script:
+  - id: flip
+    mode: single
+    parameters:
+      turn_on: bool
+    then:
+      - servo.write:
+          id: fork_servo
+          level: !lambda "return (id(trim_deg).state + (turn_on ? 1.0f : -1.0f) * id(throw_deg).state) / 90.0f;"
+      - delay: 450ms
+      - servo.write:
+          id: fork_servo
+          level: !lambda "return id(trim_deg).state / 90.0f;"
+      - delay: 350ms
+      - servo.detach: fork_servo  # limp at centre: the fork no longer touches the lever
+      - lambda: |-
+          id(fan_on) = turn_on;
+          id(purifier).publish_state(turn_on);
+      - output.set_level:
+          id: led_out
+          level: !lambda "return turn_on ? 1.0f : 0.0f;"
+
+switch:
+  - platform: template
+    id: purifier
+    name: "Purifier"
+    icon: mdi:air-purifier
+    lambda: "return id(fan_on);"
+    turn_on_action:
+      - if:
+          condition:
+            lambda: "return !id(fan_on);"
+          then:
+            - script.execute:
+                id: flip
+                turn_on: true
+    turn_off_action:
+      - if:
+          condition:
+            lambda: "return id(fan_on);"
+          then:
+            - script.execute:
+                id: flip
+                turn_on: false
+
+binary_sensor:
+  - platform: gpio
+    id: front_button
+    name: "Button"
+    pin:
+      number: GPIO3
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on_off: 30ms
+    on_click:
+      - min_length: 30ms        # short press: toggle
+        max_length: 1s
+        then:
+          - switch.toggle: purifier
+      - min_length: 5s          # hold 5 s: new filter fitted
+        max_length: 15s
+        then:
+          - lambda: "id(filter_hours) = 0; id(run_minutes) = 0;"
+          - repeat:
+              count: 3
+              then:
+                - output.set_level: { id: led_out, level: 0.0 }
+                - delay: 200ms
+                - output.set_level: { id: led_out, level: 1.0 }
+                - delay: 200ms
+          - output.set_level:
+              id: led_out
+              level: !lambda "return id(fan_on) ? 1.0f : 0.0f;"
+
+interval:
+  - interval: 1min
+    then:
+      - lambda: |-
+          if (!id(fan_on)) return;
+          if (++id(run_minutes) >= 60) { id(run_minutes) = 0; id(filter_hours) += 1; }
+
+sensor:
+  - platform: template
+    name: "Filter used"
+    icon: mdi:air-filter
+    unit_of_measurement: h
+    accuracy_decimals: 0
+    update_interval: 5min
+    lambda: "return id(filter_hours);"
+  - platform: template
+    name: "Filter life left"
+    icon: mdi:air-filter
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: 5min
+    lambda: "return std::max(0.0f, 100.0f - 100.0f * id(filter_hours) / ${filter_life_hours}.0f);"
+
+button:
+  - platform: template
+    name: "Reset filter timer"
+    icon: mdi:air-filter
+    on_press:
+      - lambda: "id(filter_hours) = 0; id(run_minutes) = 0;"
+  - platform: template
+    name: "Fix out-of-sync state"     # use if S1 was flipped by hand
+    entity_category: config
+    on_press:
+      - lambda: |-
+          id(fan_on) = !id(fan_on);
+          id(purifier).publish_state(id(fan_on));
+      - output.set_level:
+          id: led_out
+          level: !lambda "return id(fan_on) ? 1.0f : 0.0f;"
+
+# Later: auto mode with a PMS5003 particle sensor on GPIO20 (RX) / GPIO21 (TX), 5 V.
